@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="BugSense - AI Powered Bug Prediction Agent">
+    <title>BugSense Professional - Code Scanner</title>
+    
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🛡️%3C/text%3E%3C/svg%3E">
+    
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Menlo', 'monospace'],
+                    },
+                    colors: {
+                        slate: { 850: '#151e2e' }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <script src="https://unpkg.com/feather-icons"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-200 font-sans antialiased min-h-screen flex flex-col selection:bg-indigo-500/30">
+
+    <nav class="sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+                        <i data-feather="shield" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <span class="font-bold text-lg tracking-tight dark:text-white block leading-none">BugSense</span>
+                        <span class="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Professional</span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <button type="button" id="theme-toggle" aria-label="Toggle Dark Mode" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                        <i id="theme-toggle-dark-icon" data-feather="moon" class="hidden w-5 h-5"></i>
+                        <i id="theme-toggle-light-icon" data-feather="sun" class="hidden w-5 h-5"></i>
+                    </button>
+                    <a href="https://github.com" target="_blank" aria-label="View on GitHub" class="hidden md:flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors">
+                        <i data-feather="github" class="w-4 h-4"></i> GitHub
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-96 bg-gradient-to-b from-indigo-50/50 to-transparent dark:from-indigo-950/20 pointer-events-none -z-10"></div>
+
+        <div class="text-center mb-10 max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-4">
+                Secure Code. <span class="text-indigo-600 dark:text-indigo-400">Zero Bugs.</span>
+            </h1>
+            <p class="text-lg text-slate-600 dark:text-slate-400">
+                Advanced static analysis engine that detects Logic Traps, Security Flaws, and Memory Leaks before you deploy.
+            </p>
+        </div>
+
+        <div class="w-full max-w-5xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden transform transition-all">
+            
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                
+                <div class="hidden sm:flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                    <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                    <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                </div>
+
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <div class="relative w-full sm:w-64">
+                        <i data-feather="code" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
+                        <select id="language-select" aria-label="Select Programming Language" class="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all cursor-pointer">
+                            <option value="auto">✨ Auto-Detect Language</option>
+                            <option value="python">Python</option>
+                            <option value="cpp">C / C++</option>
+                            <option value="java">Java</option>
+                            <option value="javascript">JavaScript</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <button type="button" id="upload-btn" class="text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 px-3 py-2 rounded-lg transition-all flex items-center gap-2">
+                        <i data-feather="upload" class="w-3.5 h-3.5"></i> Upload File
+                    </button>
+                    <input type="file" id="file-input" class="hidden" aria-label="Upload Source Code">
+                </div>
+            </div>
+
+            <div class="relative flex h-[500px] font-mono text-sm group bg-white dark:bg-slate-950">
+                <div id="line-numbers" class="flex-none w-14 py-4 pr-4 text-right text-slate-300 dark:text-slate-600 bg-slate-50/50 dark:bg-slate-900/30 border-r border-slate-100 dark:border-slate-800 select-none overflow-hidden leading-relaxed">
+                    1
+                </div>
+
+                <textarea id="code-input" 
+                    class="flex-1 w-full h-full p-4 bg-transparent resize-none focus:outline-none text-slate-800 dark:text-slate-300 placeholder-slate-400 leading-relaxed whitespace-pre overflow-auto scrollbar-hide" 
+                    spellcheck="false" 
+                    aria-label="Source Code Input"
+                    placeholder="// Paste your source code here...&#10;// Our system will auto-detect the language and fix indentation."></textarea>
+                
+                <div id="format-badge" class="hidden absolute top-4 right-4 bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-md font-bold shadow-sm animate-pulse">
+                    Code Formatted
+                </div>
+            </div>
+
+            <div class="p-6 bg-slate-50 dark:bg-slate-900/80 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="text-xs text-slate-500 flex flex-col sm:flex-row items-center gap-2 sm:gap-6">
+                    <span class="flex items-center gap-1.5"><i data-feather="check-circle" class="w-3.5 h-3.5 text-emerald-500"></i> Local Engine Ready</span>
+                    <span class="flex items-center gap-1.5"><i data-feather="shield" class="w-3.5 h-3.5 text-indigo-500"></i> No Cloud Upload</span>
+                </div>
+                
+                <button type="button" id="analyze-btn" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white pl-6 pr-8 py-3 rounded-xl font-bold flex items-center justify-center gap-3 transition-all transform hover:-translate-y-0.5 hover:shadow-lg shadow-indigo-500/20 active:scale-95 disabled:opacity-70 disabled:cursor-wait">
+                    <div id="analyze-spinner" class="hidden w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span id="btn-text">Run Prediction Agent</span>
+                    <i data-feather="arrow-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+        
+        <p class="mt-8 text-xs text-slate-400 text-center">
+            Supported Languages: Python • C/C++ • Java • JavaScript
+        </p>
+
+    </main>
+
+    <script src="script.js"></script>
+    
+    <script>
+        // Init Icons
+        feather.replace();
+
+        // Dark Mode Logic
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const darkIcon = document.getElementById('theme-toggle-dark-icon');
+        const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+        function setDark(val) {
+            if(val) {
+                document.documentElement.classList.add('dark');
+                lightIcon.classList.remove('hidden');
+                darkIcon.classList.add('hidden');
+                localStorage.setItem('color-theme', 'dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+                darkIcon.classList.remove('hidden');
+                lightIcon.classList.add('hidden');
+                localStorage.setItem('color-theme', 'light');
+            }
+        }
+
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            setDark(true);
+        } else {
+            setDark(false);
+        }
+
+        themeToggleBtn.addEventListener('click', function() {
+            setDark(!document.documentElement.classList.contains('dark'));
+        });
+    </script>
+</body>
+</html>

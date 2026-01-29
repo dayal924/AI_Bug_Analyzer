@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // CONFIGURATION
     // ==========================================
-    const API_URL = '/analyze'; // Points to Vercel/Python backend
+    const API_URL = '/api/analyze'; // Points to Vercel/Python backend (prefixed with /api)
     const REPORT_PAGE = 'analyze.html'; // The page to show results
 
     // ==========================================

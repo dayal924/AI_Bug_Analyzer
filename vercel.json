@@ -12,8 +12,12 @@
   ],
   "routes": [
     {
-      "src": "/analyze",
+      "src": "/api/analyze",
       "dest": "backend/main.py"
+    },
+    {
+      "src": "/analyze",
+      "dest": "/api/analyze"
     },
     {
       "src": "/",

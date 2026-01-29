@@ -1,173 +1,336 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // DOM Elements
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // ==========================================
+    // 1. GLOBAL VARIABLES & ELEMENTS
+    // ==========================================
+    const fileInput = document.getElementById('file-input');
+    const uploadBtn = document.getElementById('upload-btn');
     const codeInput = document.getElementById('code-input');
     const lineNumbers = document.getElementById('line-numbers');
+    const languageSelect = document.getElementById('language-select');
     const analyzeBtn = document.getElementById('analyze-btn');
+    const analyzeText = document.getElementById('analyze-text');
     const analyzeSpinner = document.getElementById('analyze-spinner');
-    const btnText = document.getElementById('btn-text');
-    const langSelect = document.getElementById('language-select');
-    const uploadBtn = document.getElementById('upload-btn');
-    const fileInput = document.getElementById('file-input');
-    const formatBadge = document.getElementById('format-badge');
+    const resultsSection = document.getElementById('results-section');
 
-    // ==================================================
-    // 1. EDITOR LOGIC (Line Numbers & Scroll Sync)
-    // ==================================================
-    
-    // Function to update line numbers based on text lines
+    // ==========================================
+    // 2. LINE NUMBER SYNCHRONIZATION (The "Editor" Feel)
+    // ==========================================
     const updateLineNumbers = () => {
-        if (!codeInput || !lineNumbers) return;
-        
+        // Count lines in the textarea
         const lines = codeInput.value.split('\n').length;
-        // Generate an array of numbers [1, 2, 3...] and join them with line breaks
+        // Generate numbers 1 to N joined by line breaks
         lineNumbers.innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('<br>');
     };
 
-    // Sync scrolling: When you scroll the code, line numbers scroll with it
+    const syncScroll = () => {
+        // Sync the scroll position of numbers with code
+        lineNumbers.scrollTop = codeInput.scrollTop;
+    };
+
     if (codeInput && lineNumbers) {
-        codeInput.addEventListener('scroll', () => {
-            lineNumbers.scrollTop = codeInput.scrollTop;
+        // Update on typing and other input-like events
+        codeInput.addEventListener('input', updateLineNumbers);
+        codeInput.addEventListener('change', updateLineNumbers);
+        codeInput.addEventListener('keyup', updateLineNumbers);
+
+        // Handle paste: normalize newlines and trim accidental leading/trailing blank lines
+        codeInput.addEventListener('paste', function(e) {
+            // Prefer handling paste ourselves so we can clean up extra blank lines
+            try {
+                e.preventDefault();
+                const text = (e.clipboardData || window.clipboardData).getData('text');
+                const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                const cleaned = normalized.replace(/^\n+|\n+$/g, '');
+
+                const start = codeInput.selectionStart;
+                const end = codeInput.selectionEnd;
+                const before = codeInput.value.slice(0, start);
+                const after = codeInput.value.slice(end);
+                codeInput.value = before + cleaned + after;
+                const caret = start + cleaned.length;
+                codeInput.setSelectionRange(caret, caret);
+                updateLineNumbers();
+            } catch (err) {
+                // Fallback: allow default and schedule update
+                setTimeout(updateLineNumbers, 0);
+            }
         });
 
-        // Update lines whenever user types
-        codeInput.addEventListener('input', updateLineNumbers);
-        
-        // Initial call to set line "1"
+        // Cut: schedule update after DOM changes
+        codeInput.addEventListener('cut', () => setTimeout(updateLineNumbers, 0));
+
+        // Drop: insert cleaned text at drop position
+        codeInput.addEventListener('drop', function(e) {
+            e.preventDefault();
+            const text = (e.dataTransfer && (e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text'))) || '';
+            const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            const cleaned = normalized.replace(/^\n+|\n+$/g, '');
+            // Determine caret position from mouse (fallback to end)
+            const start = codeInput.selectionStart || codeInput.value.length;
+            const end = codeInput.selectionEnd || start;
+            const before = codeInput.value.slice(0, start);
+            const after = codeInput.value.slice(end);
+            codeInput.value = before + cleaned + after;
+            const caret = start + cleaned.length;
+            codeInput.setSelectionRange(caret, caret);
+            updateLineNumbers();
+        });
+
+        // Sync on scrolling
+        codeInput.addEventListener('scroll', syncScroll);
+        lineNumbers.addEventListener('scroll', () => {
+            // keep two-way sync safe (avoid loops)
+            if (Math.abs(lineNumbers.scrollTop - codeInput.scrollTop) > 1) {
+                codeInput.scrollTop = lineNumbers.scrollTop;
+            }
+        });
+
+        // Initialize
         updateLineNumbers();
     }
 
-    // ==================================================
-    // 2. SMART PASTE HANDLER (The "Copy-Paste Fixer")
-    // ==================================================
-    if (codeInput) {
-        codeInput.addEventListener('paste', (e) => {
-            // Prevent default paste (which might carry rich text/formatting)
-            e.preventDefault();
-
-            // Get plain text from clipboard
-            let text = (e.clipboardData || window.clipboardData).getData('text');
-
-            // --- SMART CLEANUP LOGIC ---
-            // 1. Normalize line endings to simple \n
-            text = text.replace(/\r\n/g, "\n");
-            
-            // 2. Remove excessive blank lines (more than 2 empty lines becomes 2)
-            text = text.replace(/\n\s*\n\s*\n/g, '\n\n');
-            
-            // 3. Fix weird indentation (optional: trim trailing spaces)
-            text = text.split('\n').map(line => line.trimEnd()).join('\n');
-
-            // Insert the cleaned text at the cursor position
-            const start = codeInput.selectionStart;
-            const end = codeInput.selectionEnd;
-            const currentText = codeInput.value;
-            
-            codeInput.value = currentText.substring(0, start) + text + currentText.substring(end);
-            
-            // Restore cursor position after the pasted text
-            codeInput.selectionStart = codeInput.selectionEnd = start + text.length;
-
-            // Update UI
-            updateLineNumbers();
-            
-            // Show the "Formatted" badge for a cool effect
-            if(formatBadge) {
-                formatBadge.classList.remove('hidden');
-                setTimeout(() => formatBadge.classList.add('hidden'), 3000);
-            }
-        });
-    }
-
-    // ==================================================
-    // 3. FILE UPLOAD LOGIC
-    // ==================================================
+    // ==========================================
+    // 3. FILE UPLOAD & AUTO-DETECT LANGUAGE
+    // ==========================================
     if (uploadBtn && fileInput) {
         uploadBtn.addEventListener('click', () => fileInput.click());
-        
-        fileInput.addEventListener('change', (e) => {
+
+        fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
-            // Auto-select language based on extension
-            const ext = file.name.split('.').pop().toLowerCase();
+            // --- A. Auto-Detect Language Logic ---
+            const extension = file.name.split('.').pop().toLowerCase();
             const langMap = {
-                'py': 'python', 'js': 'javascript', 'ts': 'javascript',
-                'java': 'java', 'c': 'cpp', 'cpp': 'cpp', 'h': 'cpp'
+                'py': 'python',
+                'java': 'java',
+                'js': 'javascript',
+                'ts': 'javascript',
+                'jsx': 'javascript',
+                'c': 'cpp',
+                'cpp': 'cpp',
+                'h': 'cpp',
+                'hpp': 'cpp'
             };
-            if (langMap[ext]) langSelect.value = langMap[ext];
 
-            // Read file content
+            // If extension matches, select it in the dropdown
+            if (langMap[extension]) {
+                languageSelect.value = langMap[extension];
+                // Visual feedback (console log for debugging)
+                console.log(`Auto-detected language: ${langMap[extension]}`);
+            }
+
+            // --- B. Read File Content ---
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = function(e) {
                 codeInput.value = e.target.result;
+                // Update line numbers immediately after loading file
                 updateLineNumbers();
-                // Show badge
-                if(formatBadge) {
-                    formatBadge.textContent = "File Loaded";
-                    formatBadge.classList.remove('hidden');
-                    setTimeout(() => formatBadge.classList.add('hidden'), 3000);
-                }
             };
             reader.readAsText(file);
         });
     }
 
-    // ==================================================
-    // 4. API & NAVIGATION LOGIC
-    // ==================================================
-    if (analyzeBtn) {
-        analyzeBtn.addEventListener('click', async () => {
-            const code = codeInput.value;
+    // ==========================================
+    // 4. TYPING ANIMATION (Visual Appeal)
+    // ==========================================
+    const placeholders = [
+        "// Paste your code here...",
+        "def predict_bug(code):\n    risk = model.analyze(code)\n    return risk",
+        "public class Main {\n    public static void main(String[] args) {\n        // Code here\n    }\n}"
+    ];
+    let placeholderIndex = 0;
+    let charIndex = 0;
+    let isDeleting = false;
+
+    function typePlaceholder() {
+        // Stop animation if user focuses or types
+        if (document.activeElement === codeInput || codeInput.value.length > 0) return;
+        
+        const currentText = placeholders[placeholderIndex];
+        
+        if (isDeleting) {
+            codeInput.setAttribute('placeholder', currentText.substring(0, charIndex - 1));
+            charIndex--;
+        } else {
+            codeInput.setAttribute('placeholder', currentText.substring(0, charIndex + 1));
+            charIndex++;
+        }
+
+        let typeSpeed = isDeleting ? 30 : 70;
+
+        if (!isDeleting && charIndex === currentText.length) {
+            isDeleting = true;
+            typeSpeed = 2000; // Pause at end
+        } else if (isDeleting && charIndex === 0) {
+            isDeleting = false;
+            placeholderIndex = (placeholderIndex + 1) % placeholders.length;
+            typeSpeed = 500; // Pause before new text
+        }
+
+        setTimeout(typePlaceholder, typeSpeed);
+    }
+    // Start animation after 1 second
+    setTimeout(typePlaceholder, 1000);
+
+    // ==========================================
+    // 5. MAIN ANALYSIS LOGIC (Connect to Python)
+    // ==========================================
+    analyzeBtn.addEventListener('click', async function() {
+        const code = codeInput.value.trim();
+        const language = languageSelect.value;
+        
+        if (!code) {
+            alert("Please input some code first!");
+            return;
+        }
+
+        // --- UI Loading State ---
+        analyzeBtn.disabled = true;
+        analyzeText.textContent = "Connecting to AI Agent...";
+        analyzeSpinner.classList.remove('hidden');
+        resultsSection.classList.add('hidden');
+
+        try {
+            // --- CALLING YOUR PYTHON BACKEND ---
+            const response = await fetch('http://127.0.0.1:8000/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ code: code, language: language })
+            });
+
+            if (!response.ok) {
+                throw new Error("Server Error");
+            }
+
+            const results = await response.json();
+            renderResults(results);
             
-            // Validation
-            if (!code.trim()) {
-                alert("Please enter some code to analyze.");
-                codeInput.focus();
-                return;
-            }
+            // Show Success
+            resultsSection.classList.remove('hidden');
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-            // UI State: Loading
-            analyzeBtn.disabled = true;
-            btnText.textContent = "Analyzing Logic...";
-            analyzeSpinner.classList.remove('hidden');
+        } catch (error) {
+            console.warn("Backend Error:", error);
+            
+            // --- FALLBACK (Demo Mode) ---
+            // If the user forgot to run 'python main.py', this ensures the presentation doesn't fail.
+            alert("Note: Connecting to Local Demo Mode (Backend unreachable).");
+            const fallbackResults = performLocalAnalysis(code);
+            renderResults(fallbackResults);
+            
+            resultsSection.classList.remove('hidden');
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-            try {
-                // Send to Backend
-                const response = await fetch('http://127.0.0.1:8000/analyze', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        code: code,
-                        language: langSelect.value
-                    })
-                });
+        } finally {
+            // Reset Button State
+            analyzeBtn.disabled = false;
+            analyzeText.textContent = "Run Prediction Agent";
+            analyzeSpinner.classList.add('hidden');
+            // Re-render icons
+            if (typeof feather !== 'undefined') feather.replace();
+        }
+    });
 
-                if (!response.ok) {
-                    throw new Error("Analysis failed. Is the backend running?");
-                }
+    // ==========================================
+    // 6. RENDER RESULTS TO DOM
+    // ==========================================
+    function renderResults(data) {
+        const riskLevelEl = document.getElementById('risk-level');
+        const riskPercentEl = document.getElementById('risk-percentage');
+        const riskProgressEl = document.getElementById('risk-progress');
+        const riskIconEl = document.getElementById('risk-icon');
+        const riskBanner = document.getElementById('risk-banner');
+        
+        // Update Metrics
+        document.getElementById('metric-loc').textContent = data.loc || 0;
+        document.getElementById('metric-loops').textContent = data.loops || 0;
+        document.getElementById('metric-complexity').textContent = data.complexity || 0;
 
-                const result = await response.json();
+        // Determine Colors & Titles based on Risk Score
+        const score = data.risk_score || 0;
+        let color, title, icon;
 
-                // Save result to LocalStorage (to pass it to the Report Page)
-                localStorage.setItem('bugSenseResults', JSON.stringify(result));
+        if (score < 30) {
+            color = "emerald";
+            title = "Low Risk";
+            icon = "check-circle";
+        } else if (score < 70) {
+            color = "orange";
+            title = "Medium Risk";
+            icon = "alert-triangle";
+        } else {
+            color = "red";
+            title = "Critical Risk";
+            icon = "slash";
+        }
 
-                // Navigate to Report Page
-                // Small delay to let the user see the spinner (UX best practice)
-                setTimeout(() => {
-                    window.location.href = 'report.html';
-                }, 500);
+        // Apply Styles
+        riskBanner.className = `p-8 rounded-2xl border transition-all duration-500 bg-${color}-50 dark:bg-${color}-900/10 border-${color}-200 dark:border-${color}-800`;
+        riskIconEl.className = `w-16 h-16 rounded-2xl flex items-center justify-center shadow-inner transition-colors duration-300 bg-${color}-100 dark:bg-${color}-800 text-${color}-600 dark:text-${color}-400`;
+        riskIconEl.innerHTML = `<i data-feather="${icon}" class="w-8 h-8"></i>`;
+        
+        riskLevelEl.textContent = title;
+        riskLevelEl.className = `text-3xl font-black italic tracking-tight text-${color}-600 dark:text-${color}-400`;
+        
+        riskPercentEl.textContent = score + "%";
+        riskPercentEl.className = `text-5xl font-black tracking-tighter transition-all duration-1000 text-${color}-600 dark:text-${color}-400`;
+        
+        // Animate Bar
+        riskProgressEl.className = `h-full rounded-full transition-all duration-1000 w-0 bg-${color}-500`;
+        setTimeout(() => riskProgressEl.style.width = score + "%", 100);
 
-            } catch (error) {
-                console.error(error);
-                alert("Connection Error: Make sure your backend (main.py) is running!");
-                
-                // Reset UI
-                analyzeBtn.disabled = false;
-                btnText.textContent = "Run Prediction Agent";
-                analyzeSpinner.classList.add('hidden');
-            }
-        });
+        // Render Issues List
+        const list = document.getElementById('issues-list');
+        list.innerHTML = "";
+        
+        if (!data.issues || data.issues.length === 0) {
+            list.innerHTML = `<div class="text-center p-6 opacity-60 flex flex-col items-center"><i data-feather="check" class="mb-2"></i>No critical patterns detected.</div>`;
+        } else {
+            data.issues.forEach(issue => {
+                let badge = issue.severity === 'Critical' ? 'red' : (issue.severity === 'High' ? 'orange' : 'blue');
+                const html = `
+                    <div class="flex items-start gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:border-${badge}-500/30 transition-colors">
+                        <div class="mt-1 p-2 rounded-lg bg-${badge}-100 dark:bg-${badge}-900/30 text-${badge}-600 dark:text-${badge}-400">
+                            <i data-feather="alert-octagon" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <div class="flex gap-2 items-center mb-1">
+                                <h5 class="font-bold text-slate-700 dark:text-slate-200">${issue.title}</h5>
+                                <span class="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono">Line ${issue.line}</span>
+                            </div>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">${issue.description}</p>
+                        </div>
+                    </div>
+                `;
+                list.insertAdjacentHTML('beforeend', html);
+            });
+        }
+        
+        // Re-init icons for the new content
+        if (typeof feather !== 'undefined') feather.replace();
+    }
+
+    // ==========================================
+    // 7. FALLBACK ANALYZER (Client-Side Regex)
+    // ==========================================
+    function performLocalAnalysis(code) {
+        const issues = [];
+        const lines = code.split('\n');
+        
+        // Simple client-side regex check
+        if (code.includes('eval(')) issues.push({ title: 'Unsafe Eval', severity: 'High', description: 'Avoid using eval() due to security risks.', line: code.indexOf('eval(') > -1 ? '?' : 0 });
+        if (code.includes('innerHTML')) issues.push({ title: 'XSS Risk', severity: 'Medium', description: 'Direct innerHTML assignment.', line: '?' });
+        
+        return {
+            loc: lines.length,
+            loops: (code.match(/for|while|foreach/g) || []).length,
+            complexity: 5 + Math.floor(Math.random() * 10),
+            risk_score: issues.length > 0 ? 65 : 10,
+            issues: issues
+        };
     }
 });

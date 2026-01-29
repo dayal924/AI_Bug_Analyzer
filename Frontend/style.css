@@ -1,55 +1,26 @@
 /* =========================================
-   1. FONT IMPORTS
-   ========================================= */
-/* Inter for UI, JetBrains Mono for Code */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
-/* =========================================
-   2. BASE STYLES
+   1. Base & Reset
    ========================================= */
 :root {
-    --primary: #4f46e5; /* Indigo-600 */
+    --primary: #6366f1;   /* Indigo 500 */
+    --secondary: #a855f7; /* Purple 500 */
 }
 
-body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    -webkit-font-smoothing: antialiased; /* Makes text look sharper on Mac */
+html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* =========================================
-   3. CRITICAL EDITOR ALIGNMENT
-   ========================================= */
-/* IMPORTANT: This ensures the line numbers match the code lines exactly.
-   If you change the font size or line height here, you must change it for both.
-*/
-textarea#code-input, 
-div#line-numbers {
-    font-family: 'JetBrains Mono', 'Menlo', 'Monaco', monospace;
-    font-size: 0.875rem; /* 14px */
-    line-height: 1.625;  /* Matches Tailwind's 'leading-relaxed' */
-    tab-size: 4;
-}
-
-/* Remove default outline on focus for a cleaner look */
-textarea:focus {
-    outline: none;
+/* Custom Text Selection Color */
+::selection {
+    background: rgba(99, 102, 241, 0.3);
+    color: inherit;
 }
 
 /* =========================================
-   4. SCROLLBAR CUSTOMIZATION
+   2. Custom Scrollbar (Chrome/Edge/Safari)
    ========================================= */
-
-/* Class to hide scrollbar but keep functionality (for the line numbers column) */
-.scrollbar-hide::-webkit-scrollbar {
-    display: none;
-}
-.scrollbar-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
-}
-
-/* Custom styled scrollbar for the main page and code editor */
 ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -60,74 +31,151 @@ textarea:focus {
 }
 
 ::-webkit-scrollbar-thumb {
-    background-color: #cbd5e1; /* Slate-300 */
+    background: #cbd5e1; /* Slate 300 */
     border-radius: 5px;
     border: 2px solid transparent;
     background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background-color: #94a3b8; /* Slate-400 */
+    background: #94a3b8; /* Slate 400 */
 }
 
-/* Dark Mode Scrollbars */
+/* Dark Mode Scrollbar */
 .dark ::-webkit-scrollbar-thumb {
-    background-color: #334155; /* Slate-700 */
+    background: #334155; /* Slate 700 */
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-    background-color: #475569; /* Slate-600 */
+    background: #475569; /* Slate 600 */
 }
 
 /* =========================================
-   5. ANIMATIONS (For Report Page)
+   3. Code Editor & Line Numbers (CRITICAL)
    ========================================= */
-
-/* Fade In */
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+/* This ensures the numbers and code align perfectly */
+#code-input, #line-numbers {
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6; /* Must match exactly */
 }
 
-/* Slide Up */
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+/* Hide scrollbar for the number column but allow JS scrolling */
+#line-numbers::-webkit-scrollbar {
+    display: none;
+}
+#line-numbers {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
 }
 
-/* Zoom In (for badges) */
-@keyframes zoomIn {
-    from { opacity: 0; transform: scale(0.9); }
-    to { opacity: 1; transform: scale(1); }
+#code-input {
+    tab-size: 4;
 }
 
-/* Utility Classes for Animations */
+/* Remove default focus outline */
+#code-input:focus {
+    outline: none;
+}
+
+/* =========================================
+   4. Floating Card Animations
+   ========================================= */
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-15px); }
+    100% { transform: translateY(0px); }
+}
+
+.floating-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    will-change: transform;
+}
+
+/* Only animate if user hasn't requested reduced motion */
+@media (prefers-reduced-motion: no-preference) {
+    .animate-float {
+        animation: float 6s ease-in-out infinite;
+    }
+}
+
+/* Hover effect: Pause animation and lift */
+.floating-card:hover {
+    animation-play-state: paused;
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.1), 
+                0 10px 20px -5px rgba(0, 0, 0, 0.04);
+}
+
+.dark .floating-card:hover {
+    box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.5);
+}
+
+/* =========================================
+   5. Background Patterns (Tech Look)
+   ========================================= */
+#home {
+    background-image: 
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+}
+
+.dark #home {
+    background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* =========================================
+   6. Animation Utilities
+   ========================================= */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translate3d(0, 40px, 0);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
 .animate-in {
     animation-fill-mode: both;
 }
 
 .fade-in {
-    animation-name: fadeIn;
+    animation-name: fadeInUp;
 }
 
-.slide-in-from-bottom-4 {
-    animation-name: slideUp;
+/* Slow Ping for the Hero Status Dot */
+@keyframes ping-slow {
+    75%, 100% {
+        transform: scale(2);
+        opacity: 0;
+    }
 }
 
-.zoom-in {
-    animation-name: zoomIn;
+.animate-ping-slow {
+    animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
-
-.duration-500 { animation-duration: 500ms; }
-.duration-700 { animation-duration: 700ms; }
-.delay-100 { animation-delay: 100ms; }
-.delay-200 { animation-delay: 200ms; }
 
 /* =========================================
-   6. UTILITIES
+   7. Mobile Menu Transition
    ========================================= */
-/* Smooth text selection color */
-::selection {
-    background-color: rgba(79, 70, 229, 0.2); /* Indigo with opacity */
-    color: inherit;
+#mobile-menu {
+    transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
+
+/* =========================================
+   8. Responsive Tweaks
+   ========================================= */
+@media (max-width: 640px) {
+    #home {
+        background-size: 30px 30px;
+    }
+    #code-input, #line-numbers {
+        font-size: 12px; /* Smaller text on mobile */
+    }
 }

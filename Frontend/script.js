@@ -1,336 +1,273 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
     
     // ==========================================
-    // 1. GLOBAL VARIABLES & ELEMENTS
+    // CONFIGURATION
     // ==========================================
-    const fileInput = document.getElementById('file-input');
-    const uploadBtn = document.getElementById('upload-btn');
+    const API_URL = '/analyze'; // Points to Vercel/Python backend
+    const REPORT_PAGE = 'analyze.html'; // The page to show results
+
+    // ==========================================
+    // DOM ELEMENTS (Home Page)
+    // ==========================================
     const codeInput = document.getElementById('code-input');
     const lineNumbers = document.getElementById('line-numbers');
-    const languageSelect = document.getElementById('language-select');
     const analyzeBtn = document.getElementById('analyze-btn');
-    const analyzeText = document.getElementById('analyze-text');
     const analyzeSpinner = document.getElementById('analyze-spinner');
-    const resultsSection = document.getElementById('results-section');
+    const btnText = document.getElementById('btn-text'); // or analyze-text
+    const langSelect = document.getElementById('language-select');
+    const uploadBtn = document.getElementById('upload-btn');
+    const fileInput = document.getElementById('file-input');
+    const formatBadge = document.getElementById('format-badge');
 
     // ==========================================
-    // 2. LINE NUMBER SYNCHRONIZATION (The "Editor" Feel)
+    // DOM ELEMENTS (Report Page)
     // ==========================================
-    const updateLineNumbers = () => {
-        // Count lines in the textarea
-        const lines = codeInput.value.split('\n').length;
-        // Generate numbers 1 to N joined by line breaks
-        lineNumbers.innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('<br>');
-    };
+    // We check if these exist to know which page we are on
+    const riskBanner = document.getElementById('risk-banner');
 
-    const syncScroll = () => {
-        // Sync the scroll position of numbers with code
-        lineNumbers.scrollTop = codeInput.scrollTop;
-    };
+    // ##################################################################
+    // PAGE 1 LOGIC: EDITOR, UPLOAD & ANALYSIS (Home Page)
+    // ##################################################################
+    
+    if (codeInput) {
+        console.log("BugSense: Editor Mode Active");
 
-    if (codeInput && lineNumbers) {
-        // Update on typing and other input-like events
+        // --- 1. Line Number & Scroll Sync ---
+        const updateLineNumbers = () => {
+            const lines = codeInput.value.split('\n').length;
+            if(lineNumbers) lineNumbers.innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('<br>');
+        };
+
+        codeInput.addEventListener('scroll', () => {
+            if(lineNumbers) lineNumbers.scrollTop = codeInput.scrollTop;
+        });
+
         codeInput.addEventListener('input', updateLineNumbers);
-        codeInput.addEventListener('change', updateLineNumbers);
-        codeInput.addEventListener('keyup', updateLineNumbers);
-
-        // Handle paste: normalize newlines and trim accidental leading/trailing blank lines
-        codeInput.addEventListener('paste', function(e) {
-            // Prefer handling paste ourselves so we can clean up extra blank lines
-            try {
-                e.preventDefault();
-                const text = (e.clipboardData || window.clipboardData).getData('text');
-                const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-                const cleaned = normalized.replace(/^\n+|\n+$/g, '');
-
-                const start = codeInput.selectionStart;
-                const end = codeInput.selectionEnd;
-                const before = codeInput.value.slice(0, start);
-                const after = codeInput.value.slice(end);
-                codeInput.value = before + cleaned + after;
-                const caret = start + cleaned.length;
-                codeInput.setSelectionRange(caret, caret);
-                updateLineNumbers();
-            } catch (err) {
-                // Fallback: allow default and schedule update
-                setTimeout(updateLineNumbers, 0);
-            }
-        });
-
-        // Cut: schedule update after DOM changes
-        codeInput.addEventListener('cut', () => setTimeout(updateLineNumbers, 0));
-
-        // Drop: insert cleaned text at drop position
-        codeInput.addEventListener('drop', function(e) {
-            e.preventDefault();
-            const text = (e.dataTransfer && (e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text'))) || '';
-            const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-            const cleaned = normalized.replace(/^\n+|\n+$/g, '');
-            // Determine caret position from mouse (fallback to end)
-            const start = codeInput.selectionStart || codeInput.value.length;
-            const end = codeInput.selectionEnd || start;
-            const before = codeInput.value.slice(0, start);
-            const after = codeInput.value.slice(end);
-            codeInput.value = before + cleaned + after;
-            const caret = start + cleaned.length;
-            codeInput.setSelectionRange(caret, caret);
-            updateLineNumbers();
-        });
-
-        // Sync on scrolling
-        codeInput.addEventListener('scroll', syncScroll);
-        lineNumbers.addEventListener('scroll', () => {
-            // keep two-way sync safe (avoid loops)
-            if (Math.abs(lineNumbers.scrollTop - codeInput.scrollTop) > 1) {
-                codeInput.scrollTop = lineNumbers.scrollTop;
-            }
-        });
-
-        // Initialize
+        // Initial call
         updateLineNumbers();
-    }
 
-    // ==========================================
-    // 3. FILE UPLOAD & AUTO-DETECT LANGUAGE
-    // ==========================================
-    if (uploadBtn && fileInput) {
-        uploadBtn.addEventListener('click', () => fileInput.click());
+        // --- 2. Smart Paste (Clean up messy code) ---
+        codeInput.addEventListener('paste', (e) => {
+            e.preventDefault();
+            let text = (e.clipboardData || window.clipboardData).getData('text');
+            
+            // Normalize endings and remove excessive gaps
+            text = text.replace(/\r\n/g, "\n").replace(/\n\s*\n\s*\n/g, '\n\n');
+            
+            const start = codeInput.selectionStart;
+            const end = codeInput.selectionEnd;
+            const currentText = codeInput.value;
+            
+            codeInput.value = currentText.substring(0, start) + text + currentText.substring(end);
+            codeInput.selectionStart = codeInput.selectionEnd = start + text.length;
+            
+            updateLineNumbers();
 
-        fileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            // --- A. Auto-Detect Language Logic ---
-            const extension = file.name.split('.').pop().toLowerCase();
-            const langMap = {
-                'py': 'python',
-                'java': 'java',
-                'js': 'javascript',
-                'ts': 'javascript',
-                'jsx': 'javascript',
-                'c': 'cpp',
-                'cpp': 'cpp',
-                'h': 'cpp',
-                'hpp': 'cpp'
-            };
-
-            // If extension matches, select it in the dropdown
-            if (langMap[extension]) {
-                languageSelect.value = langMap[extension];
-                // Visual feedback (console log for debugging)
-                console.log(`Auto-detected language: ${langMap[extension]}`);
+            // Show "Formatted" Badge
+            if(formatBadge) {
+                formatBadge.classList.remove('hidden');
+                setTimeout(() => formatBadge.classList.add('hidden'), 3000);
             }
-
-            // --- B. Read File Content ---
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                codeInput.value = e.target.result;
-                // Update line numbers immediately after loading file
-                updateLineNumbers();
-            };
-            reader.readAsText(file);
         });
-    }
 
-    // ==========================================
-    // 4. TYPING ANIMATION (Visual Appeal)
-    // ==========================================
-    const placeholders = [
-        "// Paste your code here...",
-        "def predict_bug(code):\n    risk = model.analyze(code)\n    return risk",
-        "public class Main {\n    public static void main(String[] args) {\n        // Code here\n    }\n}"
-    ];
-    let placeholderIndex = 0;
-    let charIndex = 0;
-    let isDeleting = false;
+        // --- 3. File Upload & Auto-Detect ---
+        if (uploadBtn && fileInput) {
+            uploadBtn.addEventListener('click', () => fileInput.click());
+            
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
 
-    function typePlaceholder() {
-        // Stop animation if user focuses or types
-        if (document.activeElement === codeInput || codeInput.value.length > 0) return;
-        
-        const currentText = placeholders[placeholderIndex];
-        
-        if (isDeleting) {
-            codeInput.setAttribute('placeholder', currentText.substring(0, charIndex - 1));
-            charIndex--;
-        } else {
-            codeInput.setAttribute('placeholder', currentText.substring(0, charIndex + 1));
-            charIndex++;
+                // Auto-detect Language
+                const ext = file.name.split('.').pop().toLowerCase();
+                const langMap = {
+                    'py': 'python', 'js': 'javascript', 'ts': 'javascript',
+                    'java': 'java', 'c': 'cpp', 'cpp': 'cpp'
+                };
+                if (langMap[ext] && langSelect) langSelect.value = langMap[ext];
+
+                // Read File
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    codeInput.value = e.target.result;
+                    updateLineNumbers();
+                    if(formatBadge) {
+                        formatBadge.textContent = "File Loaded";
+                        formatBadge.classList.remove('hidden');
+                        setTimeout(() => formatBadge.classList.add('hidden'), 3000);
+                    }
+                };
+                reader.readAsText(file);
+            });
         }
 
-        let typeSpeed = isDeleting ? 30 : 70;
+        // --- 4. THE ANALYZE BUTTON (Connect to Backend) ---
+        if (analyzeBtn) {
+            analyzeBtn.addEventListener('click', async () => {
+                const code = codeInput.value;
+                const lang = langSelect ? langSelect.value : 'auto';
+                
+                if (!code.trim()) {
+                    alert("Please enter code first!");
+                    return;
+                }
 
-        if (!isDeleting && charIndex === currentText.length) {
-            isDeleting = true;
-            typeSpeed = 2000; // Pause at end
-        } else if (isDeleting && charIndex === 0) {
-            isDeleting = false;
-            placeholderIndex = (placeholderIndex + 1) % placeholders.length;
-            typeSpeed = 500; // Pause before new text
+                // UI Loading State
+                analyzeBtn.disabled = true;
+                if(btnText) btnText.textContent = "Processing...";
+                if(analyzeSpinner) analyzeSpinner.classList.remove('hidden');
+
+                try {
+                    console.log(`Sending to ${API_URL}...`);
+                    
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ code: code, language: lang })
+                    });
+
+                    if (!response.ok) throw new Error("Backend connection failed.");
+
+                    const result = await response.json();
+
+                    // SUCCESS: Save data and Redirect
+                    console.log("Analysis successful. Redirecting...");
+                    localStorage.setItem('bugSenseResults', JSON.stringify(result));
+                    
+                    // Small delay for UX
+                    setTimeout(() => {
+                        window.location.href = REPORT_PAGE;
+                    }, 500);
+
+                } catch (error) {
+                    console.error(error);
+                    alert("Error: Could not connect to the Prediction Agent. \n\nCheck if your backend is running.");
+                    
+                    // Reset UI
+                    analyzeBtn.disabled = false;
+                    if(btnText) btnText.textContent = "Run Prediction Agent";
+                    if(analyzeSpinner) analyzeSpinner.classList.add('hidden');
+                }
+            });
         }
-
-        setTimeout(typePlaceholder, typeSpeed);
     }
-    // Start animation after 1 second
-    setTimeout(typePlaceholder, 1000);
 
-    // ==========================================
-    // 5. MAIN ANALYSIS LOGIC (Connect to Python)
-    // ==========================================
-    analyzeBtn.addEventListener('click', async function() {
-        const code = codeInput.value.trim();
-        const language = languageSelect.value;
-        
-        if (!code) {
-            alert("Please input some code first!");
+    // ##################################################################
+    // PAGE 2 LOGIC: RENDER REPORT (Report/Analyze Page)
+    // ##################################################################
+    
+    // We detect if we are on the report page by checking for a specific element
+    if (document.getElementById('findings-container') || riskBanner) {
+        console.log("BugSense: Report Mode Active");
+
+        // 1. Get Data
+        const dataString = localStorage.getItem('bugSenseResults');
+        if(!dataString) {
+            // If no data, send them back home
+            window.location.href = 'index.html';
             return;
         }
 
-        // --- UI Loading State ---
-        analyzeBtn.disabled = true;
-        analyzeText.textContent = "Connecting to AI Agent...";
-        analyzeSpinner.classList.remove('hidden');
-        resultsSection.classList.add('hidden');
+        const data = JSON.parse(dataString);
 
-        try {
-            // --- CALLING YOUR PYTHON BACKEND ---
-            const response = await fetch('/analyze',{
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ code: code, language: language })
-            });
+        // 2. Populate Metrics
+        const elLang = document.getElementById('lang-display');
+        const elLoc = document.getElementById('loc-display') || document.getElementById('metric-loc');
+        const elComp = document.getElementById('complexity-display') || document.getElementById('metric-complexity');
+        const elCrit = document.getElementById('critical-count');
 
-            if (!response.ok) {
-                throw new Error("Server Error");
-            }
-
-            const results = await response.json();
-            renderResults(results);
-            
-            // Show Success
-            resultsSection.classList.remove('hidden');
-            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-        } catch (error) {
-            console.warn("Backend Error:", error);
-            
-            // --- FALLBACK (Demo Mode) ---
-            // If the user forgot to run 'python main.py', this ensures the presentation doesn't fail.
-            alert("Note: Connecting to Local Demo Mode (Backend unreachable).");
-            const fallbackResults = performLocalAnalysis(code);
-            renderResults(fallbackResults);
-            
-            resultsSection.classList.remove('hidden');
-            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-        } finally {
-            // Reset Button State
-            analyzeBtn.disabled = false;
-            analyzeText.textContent = "Run Prediction Agent";
-            analyzeSpinner.classList.add('hidden');
-            // Re-render icons
-            if (typeof feather !== 'undefined') feather.replace();
-        }
-    });
-
-    // ==========================================
-    // 6. RENDER RESULTS TO DOM
-    // ==========================================
-    function renderResults(data) {
+        if(elLang) elLang.textContent = data.language || 'Unknown';
+        if(elLoc) elLoc.textContent = data.loc || 0;
+        if(elComp) elComp.textContent = data.complexity || 0;
+        
+        // 3. Risk Banner Logic
+        const score = data.risk_score || 0;
+        const badgeContainer = document.getElementById('risk-badge-container');
+        
+        // If using the simple layout
         const riskLevelEl = document.getElementById('risk-level');
         const riskPercentEl = document.getElementById('risk-percentage');
         const riskProgressEl = document.getElementById('risk-progress');
         const riskIconEl = document.getElementById('risk-icon');
-        const riskBanner = document.getElementById('risk-banner');
-        
-        // Update Metrics
-        document.getElementById('metric-loc').textContent = data.loc || 0;
-        document.getElementById('metric-loops').textContent = data.loops || 0;
-        document.getElementById('metric-complexity').textContent = data.complexity || 0;
 
-        // Determine Colors & Titles based on Risk Score
-        const score = data.risk_score || 0;
-        let color, title, icon;
+        // Determine Theme
+        let colorTheme = score < 30 ? 'emerald' : (score < 70 ? 'orange' : 'red');
+        let titleText = score < 30 ? 'Safe' : (score < 70 ? 'Warning' : 'Critical');
+        let iconName = score < 30 ? 'check-circle' : (score < 70 ? 'alert-triangle' : 'slash');
 
-        if (score < 30) {
-            color = "emerald";
-            title = "Low Risk";
-            icon = "check-circle";
-        } else if (score < 70) {
-            color = "orange";
-            title = "Medium Risk";
-            icon = "alert-triangle";
-        } else {
-            color = "red";
-            title = "Critical Risk";
-            icon = "slash";
+        // Render Complex Banner (if elements exist)
+        if (riskLevelEl && riskPercentEl) {
+             riskLevelEl.textContent = titleText;
+             riskLevelEl.className = `text-3xl font-black italic tracking-tight text-${colorTheme}-600 dark:text-${colorTheme}-400`;
+             
+             riskPercentEl.textContent = score + "%";
+             riskPercentEl.className = `text-5xl font-black tracking-tighter text-${colorTheme}-600 dark:text-${colorTheme}-400`;
+
+             if(riskIconEl) {
+                 riskIconEl.className = `w-16 h-16 rounded-2xl flex items-center justify-center shadow-inner bg-${colorTheme}-100 dark:bg-${colorTheme}-900/30 text-${colorTheme}-600 dark:text-${colorTheme}-400`;
+                 riskIconEl.innerHTML = `<i data-feather="${iconName}" class="w-8 h-8"></i>`;
+             }
+
+             if(riskProgressEl) {
+                 riskProgressEl.className = `h-full rounded-full transition-all duration-1000 w-0 bg-${colorTheme}-500`;
+                 setTimeout(() => riskProgressEl.style.width = score + "%", 200);
+             }
         }
 
-        // Apply Styles
-        riskBanner.className = `p-8 rounded-2xl border transition-all duration-500 bg-${color}-50 dark:bg-${color}-900/10 border-${color}-200 dark:border-${color}-800`;
-        riskIconEl.className = `w-16 h-16 rounded-2xl flex items-center justify-center shadow-inner transition-colors duration-300 bg-${color}-100 dark:bg-${color}-800 text-${color}-600 dark:text-${color}-400`;
-        riskIconEl.innerHTML = `<i data-feather="${icon}" class="w-8 h-8"></i>`;
-        
-        riskLevelEl.textContent = title;
-        riskLevelEl.className = `text-3xl font-black italic tracking-tight text-${color}-600 dark:text-${color}-400`;
-        
-        riskPercentEl.textContent = score + "%";
-        riskPercentEl.className = `text-5xl font-black tracking-tighter transition-all duration-1000 text-${color}-600 dark:text-${color}-400`;
-        
-        // Animate Bar
-        riskProgressEl.className = `h-full rounded-full transition-all duration-1000 w-0 bg-${color}-500`;
-        setTimeout(() => riskProgressEl.style.width = score + "%", 100);
-
-        // Render Issues List
-        const list = document.getElementById('issues-list');
-        list.innerHTML = "";
-        
-        if (!data.issues || data.issues.length === 0) {
-            list.innerHTML = `<div class="text-center p-6 opacity-60 flex flex-col items-center"><i data-feather="check" class="mb-2"></i>No critical patterns detected.</div>`;
-        } else {
-            data.issues.forEach(issue => {
-                let badge = issue.severity === 'Critical' ? 'red' : (issue.severity === 'High' ? 'orange' : 'blue');
-                const html = `
-                    <div class="flex items-start gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:border-${badge}-500/30 transition-colors">
-                        <div class="mt-1 p-2 rounded-lg bg-${badge}-100 dark:bg-${badge}-900/30 text-${badge}-600 dark:text-${badge}-400">
-                            <i data-feather="alert-octagon" class="w-4 h-4"></i>
-                        </div>
-                        <div>
-                            <div class="flex gap-2 items-center mb-1">
-                                <h5 class="font-bold text-slate-700 dark:text-slate-200">${issue.title}</h5>
-                                <span class="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono">Line ${issue.line}</span>
-                            </div>
-                            <p class="text-sm text-slate-500 dark:text-slate-400">${issue.description}</p>
-                        </div>
+        // Render Badge Container (from turn 12 design)
+        if (badgeContainer) {
+             badgeContainer.innerHTML = `
+                <div class="flex flex-col items-end">
+                    <div class="px-5 py-2 rounded-xl font-bold text-lg border bg-${colorTheme}-100 text-${colorTheme}-700 border-${colorTheme}-200 flex items-center gap-2 shadow-sm">
+                        <i data-feather="${iconName}" class="w-5 h-5"></i>
+                        ${titleText} Risk
                     </div>
-                `;
-                list.insertAdjacentHTML('beforeend', html);
-            });
+                    <div class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wider">Score: ${score}/100</div>
+                </div>
+            `;
+        }
+
+        // 4. Render Issues List
+        const container = document.getElementById('findings-container') || document.getElementById('issues-list');
+        let critCount = 0;
+
+        if (container) {
+            container.innerHTML = "";
+            if (!data.issues || data.issues.length === 0) {
+                container.innerHTML = `<div class="p-12 text-center text-slate-400">No vulnerabilities found. Code is clean.</div>`;
+            } else {
+                data.issues.forEach(issue => {
+                    if(issue.severity === 'Critical') critCount++;
+                    
+                    // Dynamic Colors for Issues
+                    let sevColor = issue.severity === 'Critical' ? 'red' : (issue.severity === 'High' ? 'orange' : 'blue');
+                    
+                    const html = `
+                        <div class="p-6 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                            <div class="flex items-start gap-4">
+                                <div class="mt-1 flex-shrink-0">
+                                    <span class="px-3 py-1 rounded-md text-xs font-bold border uppercase bg-${sevColor}-100 text-${sevColor}-700 border-${sevColor}-200 dark:bg-${sevColor}-900/30 dark:text-${sevColor}-400 dark:border-${sevColor}-800">
+                                        ${issue.severity}
+                                    </span>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <h3 class="font-bold text-slate-800 dark:text-slate-200 text-lg">${issue.title}</h3>
+                                        <span class="text-sm font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">Line ${issue.line}</span>
+                                    </div>
+                                    <p class="text-slate-600 dark:text-slate-400 leading-relaxed">${issue.description}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    container.insertAdjacentHTML('beforeend', html);
+                });
+            }
         }
         
-        // Re-init icons for the new content
-        if (typeof feather !== 'undefined') feather.replace();
-    }
-
-    // ==========================================
-    // 7. FALLBACK ANALYZER (Client-Side Regex)
-    // ==========================================
-    function performLocalAnalysis(code) {
-        const issues = [];
-        const lines = code.split('\n');
+        if(elCrit) elCrit.textContent = critCount;
         
-        // Simple client-side regex check
-        if (code.includes('eval(')) issues.push({ title: 'Unsafe Eval', severity: 'High', description: 'Avoid using eval() due to security risks.', line: code.indexOf('eval(') > -1 ? '?' : 0 });
-        if (code.includes('innerHTML')) issues.push({ title: 'XSS Risk', severity: 'Medium', description: 'Direct innerHTML assignment.', line: '?' });
-        
-        return {
-            loc: lines.length,
-            loops: (code.match(/for|while|foreach/g) || []).length,
-            complexity: 5 + Math.floor(Math.random() * 10),
-            risk_score: issues.length > 0 ? 65 : 10,
-            issues: issues
-        };
+        // Re-init Icons
+        if(typeof feather !== 'undefined') feather.replace();
     }
 });

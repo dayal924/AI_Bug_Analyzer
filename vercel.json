@@ -20,6 +20,10 @@
       "dest": "/frontend/index.html"
     },
     {
+      "src": "/analyze.html",
+      "dest": "/frontend/analyze.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }

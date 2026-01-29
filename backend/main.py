@@ -9,7 +9,7 @@ from typing import List, Dict, Any
 # ==========================================
 # 1. SETUP & CONFIGURATION
 # ==========================================
-app = FastAPI(title="BugSense Professional Engine", version="4.0")
+app = FastAPI(title="BugAnalyzer Professional Engine", version="4.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -214,7 +214,7 @@ async def api_analyze(request: CodeRequest):
 
 @app.get("/")
 def api_health():
-    return {"status": "BugSense Professional Online", "version": "4.0"}
+    return {"status": "BugAnalyzer Professional Online", "version": "4.0"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
